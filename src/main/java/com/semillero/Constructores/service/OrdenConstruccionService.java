@@ -19,7 +19,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
-
 import com.semillero.Constructores.DTO.OrdenRequest;
 import com.semillero.Constructores.domain.OrdenConstruccion;
 import com.semillero.Constructores.domain.TipoConstruccion;
@@ -27,6 +26,7 @@ import com.semillero.Constructores.domain.model.Coordenada;
 import com.semillero.Constructores.domain.model.EstadoOrden;
 import com.semillero.Constructores.domain.model.EstadoOrdenTotal;
 import com.semillero.Constructores.domain.model.Fechas;
+import com.semillero.Constructores.domain.model.OrdenesData;
 import com.semillero.Constructores.repository.OrdenConstruccionRepository;
 import com.semillero.Constructores.repository.TipoConstruccionRepository;
 
@@ -60,7 +60,8 @@ public class OrdenConstruccionService {
     public List<OrdenConstruccion> listarTodas() {
         return ordenRepository.findAll();
     }
-  public OrdenesData<OrdenConstruccion> listarTodasPaginator(int page, int size) {
+
+    public OrdenesData<OrdenConstruccion> listarTodasPaginator(int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
         Page<OrdenConstruccion> pageResult = ordenRepository.findAll(pageable);
 
@@ -157,23 +158,6 @@ public class OrdenConstruccionService {
         });
     }
 
-    public CompletableFuture<OrdenConstruccion> procesarOrdenAsync(OrdenRequest request, String jobId) {
-       
-        return CompletableFuture.supplyAsync(() -> {
-            // Ejecución de la lógica de negocio de forma no bloqueante
-
-            TipoConstruccion tipo = obtenerTipoConstruccion(request.getTipo());
-            Coordenada coordenada = new Coordenada(request.getX(), request.getY());
-            validarCoordenada(coordenada);
-            inventarioService.consumirMateriales(tipo.getRequerimientos());
-
-            OrdenConstruccion orden = crearOrden(tipo, coordenada);
-            System.out.println("✅ Orden " + jobId + " completada por el Servicio");
-            return orden;
-        }, orderProcessingExecutor);
-
-    }
-
     /**
      * Ideal para transformaciones lentas, pesadas o potencialmente bloqueantes,
      * ya que no bloquea el hilo del future que acaba de completarse y utiliza
@@ -181,6 +165,11 @@ public class OrdenConstruccionService {
      * los recursos del sistema de hilos.
      * Sin executor (default)
      * Puede fallar en capturar algunas excepciones sincrónicas
+     * 
+     * Analogía: Si necesitas cambiar el color de un coche (transformación), usa
+     * thenApplyAsync. Si necesitas que, tras construir el coche, el robot de
+     * pintura comience su trabajo (operación asíncrona dependiente), usa
+     * thenComposeAsync.
      */
     public CompletableFuture<OrdenConstruccion> procesarOrdenAsyncV2(OrdenRequest request, String jobId) {
         Coordenada coordenada = new Coordenada(request.getX(), request.getY());
@@ -277,9 +266,10 @@ public class OrdenConstruccionService {
 
     private Optional<OrdenConstruccion> finalizarSiCorresponde(OrdenConstruccion orden) {
         LocalDate hoy = LocalDate.now();
-
+        System.out.println(orden.getFechaFinProgramada().isEqual(hoy) || orden.getFechaFinProgramada().isBefore(hoy));
+        System.out.println(hoy);
         return Optional.ofNullable(orden.getFechaFinProgramada())
-                .filter(fechaFin -> fechaFin.isEqual(hoy))
+                .filter(fechaFin -> fechaFin.isEqual(hoy) || orden.getFechaFinProgramada().isBefore(hoy))
                 .map(fechaFin -> finalizarOrden(orden))
                 .or(() -> {
                     System.out.println("La orden aun no finaliza.");

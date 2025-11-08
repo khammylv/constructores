@@ -1,4 +1,4 @@
-package com.semillero.Constructores.service;
+package com.semillero.Constructores.components;
 
 import java.io.IOException;
 import java.util.Map;
@@ -6,41 +6,29 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.stereotype.Component;
-
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import com.semillero.Constructores.domain.OrdenConstruccion;
+import com.semillero.Constructores.DTO.ReponerResultado;
 
-/**
- * SSE y Cliente EventSource: La implementación de SSE en los navegadores
- * (clase EventSource en JavaScript) tiene una lógica de reconexión automática
- * nativa.
- * Si la conexión GET falla, el cliente automáticamente intenta reconectarse.
- * Esto no existe para la respuesta POST original
- */
 
 @Component
-public class SseJobManager {
-    // Mapas concurrentes para trabajo y emisores
-    private final Map<String, CompletableFuture<OrdenConstruccion>> trabajos = new ConcurrentHashMap<>();
+public class InventarioJobManager {
+    // ReponerResultado
+    private final Map<String, CompletableFuture<ReponerResultado>> trabajos = new ConcurrentHashMap<>();
     private final Map<String, SseEmitter> emisores = new ConcurrentHashMap<>();
 
-
+    private final Map<String, ReponerResultado> trabajosGenerados = new ConcurrentHashMap<>();
 
     private final Map<String, Object> resultadosPendientes = new ConcurrentHashMap<>();
 
-    private static final long SSE_TIMEOUT = 0L; // conexión indefinida
+    private static final long SSE_TIMEOUT = 0L;
 
-    // Registrar tarea
-    public void registrarTrabajo(String jobId, CompletableFuture<OrdenConstruccion> futuro) {
+    public void registrarTrabajo(String jobId, CompletableFuture<ReponerResultado> futuro) {
         trabajos.put(jobId, futuro);
         System.out.println(" Trabajo registrado: " + jobId);
     }
 
-    // Notificar finalización
-
-
-    public void notificarCompletado(String jobId, OrdenConstruccion res, Throwable err) {
+    public void notificarCompletado(String jobId, ReponerResultado res, Throwable err) {
         SseEmitter emitter = emisores.remove(jobId);
 
         if (emitter != null) {
@@ -50,13 +38,16 @@ public class SseJobManager {
             resultadosPendientes.put(jobId, err != null ? err : res);
         }
 
+        if (res != null && err == null) {
+            trabajosGenerados.put(jobId, res);
+
+        }
+
         trabajos.remove(jobId);
     }
 
- 
-
     public SseEmitter crearEmisor(String jobId) {
-        CompletableFuture<OrdenConstruccion> futuro = trabajos.get(jobId);
+        CompletableFuture<ReponerResultado> futuro = trabajos.get(jobId);
 
         if (futuro == null && !resultadosPendientes.containsKey(jobId)) {
             // Trabajo no existe
@@ -89,8 +80,8 @@ public class SseJobManager {
         Object pendiente = resultadosPendientes.remove(jobId);
 
         if (pendiente != null) {
-            if (pendiente instanceof OrdenConstruccion) {
-                enviarEvento(emitter, (OrdenConstruccion) pendiente, null);
+            if (pendiente instanceof ReponerResultado) {
+                enviarEvento(emitter, (ReponerResultado) pendiente, null);
             } else if (pendiente instanceof Throwable) {
                 enviarEvento(emitter, null, (Throwable) pendiente);
             }
@@ -109,9 +100,7 @@ public class SseJobManager {
         return emitter;
     }
 
-
-
-    private void enviarEvento(SseEmitter emitter, OrdenConstruccion res, Throwable err) {
+    private void enviarEvento(SseEmitter emitter, ReponerResultado res, Throwable err) {
         try {
             if (err != null) {
                 emitter.send(SseEmitter.event()
@@ -120,7 +109,7 @@ public class SseJobManager {
             } else {
                 emitter.send(SseEmitter.event()
                         .name("completado")
-                        .data(Map.of("status", "COMPLETADO", "ordenId", res.getId())));
+                        .data(Map.of("status", "COMPLETADO", "ordenId", res)));
             }
         } catch (IOException e) {
             System.err.println("⚠️ Error enviando SSE: " + e.getMessage());
@@ -129,4 +118,11 @@ public class SseJobManager {
         }
     }
 
+     public ReponerResultado obtenerResultado(String jobId) {
+        return trabajosGenerados.get(jobId);
+    }
+
+    public void eliminarResultado(String jobId) {
+        trabajosGenerados.remove(jobId);
+    }
 }

@@ -1,4 +1,4 @@
-package com.semillero.Constructores.service;
+package com.semillero.Constructores.domain.model;
 
 import java.util.List;
 

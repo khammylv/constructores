@@ -12,13 +12,15 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import com.semillero.Constructores.service.PdfJobManager;
+import com.semillero.Constructores.components.PdfJobManager;
+
 import org.springframework.http.MediaType;
+
 @CrossOrigin(origins = "http://localhost:4200")
 @RestController
 @RequestMapping("/api/pdf")
 public class PdfController {
-   private final PdfJobManager jobManager;
+    private final PdfJobManager jobManager;
 
     @Autowired
     public PdfController(PdfJobManager jobManager) {
@@ -38,18 +40,29 @@ public class PdfController {
         return jobManager.crearEmisor(jobId);
     }
 
-    //  Descargar PDF cuando esté listo
+    // Descargar PDF cuando esté listo
     @GetMapping("/descargar/{jobId}")
-   public ResponseEntity<byte[]> descargarPdf(@PathVariable String jobId) {
-    byte[] pdf = jobManager.obtenerResultado(jobId);
-    if (pdf == null) return ResponseEntity.notFound().build();
+    public ResponseEntity<byte[]> descargarPdf(@PathVariable String jobId) {
+        byte[] pdf = jobManager.obtenerResultado(jobId);
+        if (pdf == null)
+            return ResponseEntity.notFound().build();
 
-    // Opcional: eliminar después de descargar
-     jobManager.eliminarPdf(jobId);
+        // Opcional: eliminar después de descargar
+        jobManager.eliminarPdf(jobId);
 
-    return ResponseEntity.ok()
-            .header("Content-Disposition", "attachment; filename=informe_async.pdf")
-            .contentType(MediaType.APPLICATION_PDF)
-            .body(pdf);
-}
+        return ResponseEntity.ok()
+                .header("Content-Disposition", "attachment; filename=informe_async.pdf")
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(pdf);
+    }
+
+    @GetMapping("/descargar-cripto/{jobId}")
+    public ResponseEntity<Map<String, String>> descargarPdfEncriptado(@PathVariable String jobId) {
+
+        String pdf = jobManager.obtenerResultadov2(jobId);
+        if (pdf == null)
+            return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(Map.of("file", pdf));
+
+    }
 }

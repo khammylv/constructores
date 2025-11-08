@@ -1,51 +1,53 @@
-package com.semillero.Constructores.domain.model;
+package com.semillero.Constructores.domain;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import com.semillero.Constructores.domain.model.Material;
+
 @Document(collection = "inventario")
 public class Inventario {
-      @Id
+    @Id
     private String id = "INVENTARIO_UNICO";
 
-    // Guardamos las cantidades como Long, usando el nombre del enum como clave
+   
     private Map<Material, Long> materiales;
 
-    // Constructor vacío requerido por MongoDB
+    
     public Inventario() {
         this.materiales = new ConcurrentHashMap<>();
     }
 
-    // Constructor con valores iniciales
+   
     public Inventario(Map<Material, Long> cantidadesIniciales) {
         this.materiales = new ConcurrentHashMap<>(cantidadesIniciales);
     }
 
     public boolean tieneSuficiente(Map<Material, Integer> requerimientos) {
-        for (Map.Entry<Material, Integer> entry : requerimientos.entrySet()) {
-            Material material = entry.getKey();
-            int requerido = entry.getValue();
-
-            if (materiales.getOrDefault(material, 0L) < requerido) {
-                return false;
-            }
-        }
-        return true; 
+       return requerimientos.entrySet().stream()
+            .allMatch(entry -> materiales.getOrDefault(entry.getKey(), 0L) >= entry.getValue());
+        
     }
 
-    public void consumirMateriales(Map<Material, Integer> requerimientos) {
-        for (Map.Entry<Material, Integer> entry : requerimientos.entrySet()) {
-            Material material = entry.getKey();
-            int consumido = entry.getValue();
-            materiales.computeIfPresent(material, (k, v) -> v - consumido);
-        }
-    }
+    public List<Material> materialesInsuficientes(Map<Material, Integer> requerimientos) {
+    return requerimientos.entrySet().stream()
+        .filter(entry -> materiales.getOrDefault(entry.getKey(), 0L) < entry.getValue()) // los que NO alcanzan
+        .map(Map.Entry::getKey) 
+        .toList(); 
+}
 
-    public void reponerMateriales(Material material, long cantidad) {
+
+  public void consumirMateriales(Map<Material, Integer> requerimientos) {
+    requerimientos.forEach((material, consumido) ->
+        materiales.computeIfPresent(material, (k, v) -> v - consumido)
+    );
+}
+
+    public void reponerMateriales(Material material, Long cantidad) {
         materiales.merge(material, cantidad, Long::sum);
     }
 
@@ -64,4 +66,14 @@ public class Inventario {
     public void setMateriales(Map<Material, Long> materiales) {
         this.materiales = materiales;
     }
+
+   
+
+
+
+    public void reponerMateriales(Material material, long cantidad) {
+        materiales.merge(material, cantidad, Long::sum);
+    }
+
+
 }

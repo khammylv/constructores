@@ -1,4 +1,4 @@
-package com.semillero.Constructores.service;
+package com.semillero.Constructores.components;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -8,6 +8,12 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+
+import javax.crypto.Cipher;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+
+import java.util.Base64;
 import java.util.List;
 
 import org.springframework.stereotype.Component;
@@ -16,6 +22,9 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import com.semillero.Constructores.domain.InformePDF;
 import com.semillero.Constructores.domain.OrdenConstruccion;
 import com.semillero.Constructores.domain.model.Fechas;
+import com.semillero.Constructores.service.OrdenConstruccionService;
+
+import io.github.cdimascio.dotenv.Dotenv;
 
 @Component
 public class PdfJobManager {
@@ -25,6 +34,7 @@ public class PdfJobManager {
     private static final long SSE_TIMEOUT = 0L; // conexión indefinida
 
     private final Map<String, byte[]> pdfGenerados = new ConcurrentHashMap<>();
+    private final Map<String, String> pdfGeneradosv2 = new ConcurrentHashMap<>();
 
     private final OrdenConstruccionService ordenService;
 
@@ -32,9 +42,7 @@ public class PdfJobManager {
         this.ordenService = ordenService;
     }
 
-    
-
-    //  Inicia el trabajo asincrónico
+    // Inicia el trabajo asincrónico
     public String iniciarGeneracionPdf() {
         String jobId = UUID.randomUUID().toString();
         CompletableFuture<List<OrdenConstruccion>> ordenesFuture = ordenService.listarTodasAsync();
@@ -54,13 +62,20 @@ public class PdfJobManager {
 
         trabajos.put(jobId, trabajo);
 
-        trabajo.whenComplete((pdfBytes, error) -> notificarCompletado(jobId, pdfBytes, error));
+        trabajo.whenComplete((pdfBytes, error) -> {
+            try {
+                notificarCompletado(jobId, pdfBytes, error);
+            } catch (Exception e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+        });
 
         System.out.println("Generación PDF registrada: " + jobId);
         return jobId;
     }
 
-    //  Crea el emisor SSE para escuchar el progreso o la finalización
+    // Crea el emisor SSE para escuchar el progreso o la finalización
     public SseEmitter crearEmisor(String jobId) {
         CompletableFuture<byte[]> futuro = trabajos.get(jobId);
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
@@ -101,23 +116,25 @@ public class PdfJobManager {
         return emitter;
     }
 
-    //  Envía resultado o error
-private void notificarCompletado(String jobId, byte[] pdfBytes, Throwable err) {
-    SseEmitter emitter = emisores.remove(jobId);
+    // Envía resultado o error
+    private void notificarCompletado(String jobId, byte[] pdfBytes, Throwable err) throws Exception {
+        SseEmitter emitter = emisores.remove(jobId);
 
-    if (emitter != null)
-        enviarEvento(emitter, pdfBytes, err);
-    else
-        resultadosPendientes.put(jobId, err != null ? err : pdfBytes);
+        if (emitter != null)
+            enviarEvento(emitter, pdfBytes, err);
+        else
+            resultadosPendientes.put(jobId, err != null ? err : pdfBytes);
 
-    //  Guardar el PDF en memoria
-    if (pdfBytes != null && err == null) {
-        pdfGenerados.put(jobId, pdfBytes);
-        System.out.println("📄 PDF guardado para descarga: " + jobId);
+        // Guardar el PDF en memoria
+        if (pdfBytes != null && err == null) {
+            pdfGenerados.put(jobId, pdfBytes);
+            pdfGeneradosv2.put(jobId, encriptarPDF(pdfBytes));
+            System.out.println(" PDF guardado para descarga: " + jobId);
+        }
+
+        trabajos.remove(jobId);
     }
 
-    trabajos.remove(jobId);
-}
     // Envía evento SSE
     private void enviarEvento(SseEmitter emitter, byte[] pdfBytes, Throwable err) {
         try {
@@ -137,12 +154,33 @@ private void notificarCompletado(String jobId, byte[] pdfBytes, Throwable err) {
         }
     }
 
-   public byte[] obtenerResultado(String jobId) {
-    return pdfGenerados.get(jobId);
-}
+    public String encriptarPDF(byte[] pdf)throws Exception {
+          Dotenv dotenv = Dotenv.load();
 
-public void eliminarPdf(String jobId) {
-    pdfGenerados.remove(jobId);
-}
+        String key = dotenv.get("KEY");
+        String iv = dotenv.get("IV");
+       
+
+        SecretKeySpec secretKey = new SecretKeySpec(key.getBytes(), "AES");
+        IvParameterSpec ivSpec = new IvParameterSpec(iv.getBytes());
+
+        Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivSpec);
+        byte[] encryptedBytes = cipher.doFinal(pdf);
+        return Base64.getEncoder().encodeToString(encryptedBytes);
+
+    }
+
+    public byte[] obtenerResultado(String jobId) {
+        return pdfGenerados.get(jobId);
+    }
+
+    public String obtenerResultadov2(String jobId) {
+        return pdfGeneradosv2.get(jobId);
+    }
+
+    public void eliminarPdf(String jobId) {
+        pdfGenerados.remove(jobId);
+    }
 
 }

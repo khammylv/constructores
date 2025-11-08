@@ -1,11 +1,11 @@
-package com.semillero.Constructores.service;
+package com.semillero.Constructores.components;
 
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import com.semillero.Constructores.domain.model.Inventario;
+import com.semillero.Constructores.domain.Inventario;
 import com.semillero.Constructores.domain.model.Material;
 import com.semillero.Constructores.repository.InventarioRepository;
 

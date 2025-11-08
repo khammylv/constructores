@@ -1,4 +1,4 @@
-package com.semillero.Constructores.service;
+package com.semillero.Constructores.components;
 
 import java.sql.Date;
 import java.util.Map;

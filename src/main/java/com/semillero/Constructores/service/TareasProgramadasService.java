@@ -18,7 +18,7 @@ public class TareasProgramadasService {
     //@Scheduled(cron = "0 0 7 * * *")
     //@Scheduled(fixedDelay = 10000)
     @Scheduled(cron = "0 0 7 * * *")
-    public void programarOrdenDiaria() {
+   public void programarOrdenDiaria() {
         System.out.println("Ejecutando tarea programada: programarOrdenDiariaDia()");
         ordenService.programarSiguienteOrdenAsync()
                 .thenAccept(opt -> opt.ifPresent(orden ->
@@ -31,7 +31,7 @@ public class TareasProgramadasService {
     //@Scheduled(fixedDelay = 10000)
    //@Scheduled(cron = "0 0 20 * * *")
    @Scheduled(cron = "0 0 20 * * *")
-    public void finalizarOrdenDiaria() {
+   public void finalizarOrdenDiaria() {
         System.out.println(" Ejecutando tarea programada: finalizarOrdenDiariaNoche()");
         ordenService.finalizarOrdenSiCorrespondeAsync()
                 .thenAccept(opt -> opt.ifPresent(orden ->
